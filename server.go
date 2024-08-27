@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -162,6 +164,11 @@ func echoDetailsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Read the query parameters for the file path
 	filePath := r.URL.Query().Get("path")
 	if filePath == "" {
@@ -169,32 +176,88 @@ func writeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read the request body
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
-		return
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		err := r.ParseMultipartForm(32 << 10) // 32 MB
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fileNames := make([]string, 0)
+
+		formData := r.MultipartForm
+		log.Printf("Received form data with %d files\n", len(formData.File))
+		for _, files := range formData.File {
+			for i := range files {
+				file, err := files[i].Open()
+				if err != nil {
+					http.Error(w, "Failed to open file", http.StatusInternalServerError)
+					return
+				}
+				defer file.Close()
+
+				fp := filepath.Join(filePath, files[i].Filename)
+				out, err := os.Create(fp)
+				if err != nil {
+					http.Error(w, "Failed to create file", http.StatusInternalServerError)
+					return
+				}
+				defer out.Close()
+
+				_, err = io.Copy(out, file)
+				if err != nil {
+					http.Error(w, "Failed to write to file", http.StatusInternalServerError)
+					return
+				}
+
+				log.Printf("Saved file: %s\n", fp)
+				fileNames = append(fileNames, fp)
+			}
+		}
+
+		// Set the response content type to JSON
+		w.Header().Set("Content-Type", "application/json")
+
+		// Write the response
+		jsonData, err := json.Marshal(map[string]interface{}{
+			"message": "Files saved",
+			"files":   fileNames,
+		})
+		if err != nil {
+			http.Error(w, "Failed to convert to JSON", http.StatusInternalServerError)
+			return
+		}
+
+		// Write the response
+		w.Write(jsonData)
+	} else {
+		// Read the request body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Received request with length: %d\n", len(body))
+
+		// Create the file
+		file, err := os.Create(filePath)
+		if err != nil {
+			http.Error(w, "Failed to create file", http.StatusInternalServerError)
+			return
+		}
+		defer file.Close()
+
+		// Write the body to the file
+		_, err = file.WriteString(string(body))
+		if err != nil {
+			http.Error(w, "Failed to write to file", http.StatusInternalServerError)
+			return
+		}
+
+		// Set the response content type to JSON
+		w.Header().Set("Content-Type", "application/json")
+
+		// Write the response
+		w.Write([]byte(`{"message": "File saved"}`))
 	}
-	log.Printf("Received request with length: %d\n", len(body))
-
-	// Create the file
-	file, err := os.Create(filePath)
-	if err != nil {
-		http.Error(w, "Failed to create file", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-
-	// Write the body to the file
-	_, err = file.WriteString(string(body))
-	if err != nil {
-		http.Error(w, "Failed to write to file", http.StatusInternalServerError)
-		return
-	}
-
-	// Set the response content type to JSON
-	w.Header().Set("Content-Type", "application/json")
-
-	// Write the response
-	w.Write([]byte(`{"message": "Success"}`))
 }
