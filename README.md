@@ -1,6 +1,6 @@
 # Mock HTTP Server
 
-This is a simple mock HTTP server written in Go that can be used to test HTTP requests and responses.
+This is a mock HTTP server written in [Go](https://go.dev) that can be used to test HTTP requests.
 
 ## Features
 
