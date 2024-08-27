@@ -160,3 +160,41 @@ func echoDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	// Write the JSON response
 	w.Write(jsonData)
 }
+
+func writeHandler(w http.ResponseWriter, r *http.Request) {
+	// Read the query parameters for the file path
+	filePath := r.URL.Query().Get("path")
+	if filePath == "" {
+		http.Error(w, "Missing 'path' query parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Received request with length: %d\n", len(body))
+
+	// Create the file
+	file, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Failed to create file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// Write the body to the file
+	_, err = file.WriteString(string(body))
+	if err != nil {
+		http.Error(w, "Failed to write to file", http.StatusInternalServerError)
+		return
+	}
+
+	// Set the response content type to JSON
+	w.Header().Set("Content-Type", "application/json")
+
+	// Write the response
+	w.Write([]byte(`{"message": "Success"}`))
+}
