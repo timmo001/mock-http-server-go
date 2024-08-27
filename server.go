@@ -10,33 +10,60 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type ResponseError struct {
+	Error   string `json:"error"`
+	Details string `json:"details"`
+}
+
 func main() {
 	// Setup a logger to a file
 	f, err := os.OpenFile("mockhttpserver.log", os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
-	CheckErr(err)
-
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer f.Close()
-	log.SetOutput(f)
+	log.SetOutput(io.MultiWriter(os.Stdout, f))
 
 	log.Println("--- Starting Mock HTTP Server ---")
 
 	// Load environment variables from .env file
 	err = godotenv.Load()
-	CheckErr(err)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	SetupServerHandlers()
 	StartServer()
 }
 
-func CheckErr(err error) {
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func SetupServerHandlers() {
 	http.HandleFunc("/echo", echoHandler)
 	http.HandleFunc("/echo/details", echoDetailsHandler)
+	http.HandleFunc("/write", writeHandler)
+}
+
+func ReadBody(r *http.Request) (*string, *ResponseError) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, &ResponseError{
+			Error:   "Failed to read request body",
+			Details: err.Error(),
+		}
+	}
+	bodyString := string(body)
+	return &bodyString, nil
+}
+
+func MarshalJSON(v interface{}) (*string, *ResponseError) {
+	jsonData, err := json.Marshal(v)
+	if err != nil {
+		return nil, &ResponseError{
+			Error:   "Failed to convert to JSON",
+			Details: err.Error(),
+		}
+	}
+	jsonString := string(jsonData)
+	return &jsonString, nil
 }
 
 func StartServer() {
@@ -55,14 +82,21 @@ func StartServer() {
 
 func echoHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the request body
-	body, err := io.ReadAll(r.Body)
+	body, err := ReadBody(r)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		jsonData, err := MarshalJSON(err)
+		if err != nil {
+			http.Error(w, "Failed to convert to JSON", http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, *jsonData, http.StatusInternalServerError)
 		return
 	}
 
 	// Echo the request body
-	w.Write(body)
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(*body))
 }
 
 func echoDetailsHandler(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +116,10 @@ func echoDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bodyBytes, err := io.ReadAll(r.Body)
-	CheckErr(err)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		return
+	}
 
 	textBody := string(bodyBytes)
 
