@@ -22,7 +22,7 @@ func main() {
 	// Load environment variables from .env file
 	err = godotenv.Load()
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Could not load .env file")
 	}
 
 	SetupServerHandlers()
