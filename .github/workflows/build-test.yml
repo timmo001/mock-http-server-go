@@ -62,7 +62,7 @@ jobs:
           check-latest: true
           go-version: "stable"
       - name: Build
-        run: go build -o letmeknow-server-${{ matrix.arch }}${{ matrix.platform == 'windows-latest' && '.exe' || '' }} -v .
+        run: go build -o mock-http-server-${{ matrix.arch }}${{ matrix.platform == 'windows-latest' && '.exe' || '' }} -v .
       - name: Test
         run: go test -v ./...
       - name: Upload artifacts
@@ -70,4 +70,4 @@ jobs:
         with:
           name: ${{ matrix.name }}
           path: |
-            letmeknow-server-${{ matrix.arch }}${{ matrix.platform == 'windows-latest' && '.exe' || '' }}
+            mock-http-server-${{ matrix.arch }}${{ matrix.platform == 'windows-latest' && '.exe' || '' }}
