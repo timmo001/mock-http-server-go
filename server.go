@@ -17,7 +17,7 @@ type ResponseError struct {
 
 func main() {
 	// Setup a logger to a file
-	f, err := os.OpenFile("mockhttpserver.log", os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	f, err := os.OpenFile("mock-http-server-go.log", os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
